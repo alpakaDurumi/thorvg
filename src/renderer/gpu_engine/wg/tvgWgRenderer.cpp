@@ -677,3 +677,5 @@ WgRenderer::WgRenderer(TVG_UNUSED uint32_t threads, TVG_UNUSED EngineOption op)
     ++_rendererCnt;
     _rendererMtx.unlock();
 }
+
+extern "C" const char tvg_size_probe[4096] = "probe";
