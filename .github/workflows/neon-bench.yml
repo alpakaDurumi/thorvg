@@ -1,0 +1,13 @@
+name: effectFill NEON bench
+on:
+  push:
+    branches: [bench/effectfill-neon]
+  workflow_dispatch:
+jobs:
+  bench:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: bash bench/neon.sh
