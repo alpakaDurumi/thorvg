@@ -627,33 +627,32 @@ static void _fillRow(uint32_t* dst, uint32_t* src, uint32_t len, uint32_t color,
         _mm256_storeu_si256(pixels, result);
     }
 #elif defined(THORVG_NEON_SUPPORT)
-    const auto colorVec = vreinterpretq_u8_u32(vdupq_n_u32(color));
-    const auto colorLow = vget_low_u8(colorVec);
-    const auto colorHigh = vget_high_u8(colorVec);
-    const auto colorWide = vmovl_u8(colorLow);
-    const auto bias = vdupq_n_u16(0xff);
+    const auto opacityVec = vdupq_n_u16(opacity);
+    const auto bias = vdupq_n_u16(510);
+    const auto full = vdupq_n_u16(257);
+    const auto lowByte = vdupq_n_u16(0x00ff);
+    // 0x00?? per 16-bit half: channels 0 and 2 in colorEven, channels 1 and 3 in colorOdd
+    const auto colorEven = vreinterpretq_u16_u32(vdupq_n_u32(color & 0x00ff00ff));
+    const auto colorOdd = vreinterpretq_u16_u32(vdupq_n_u32((color >> 8) & 0x00ff00ff));
 
     for (; len - x >= 4; x += 4) {
         auto pixels = dst + x;
-        // MULTIPLY(opacity, alpha) in 16-bit lanes, the upper half of each pixel stays 0
-        auto alpha = vreinterpretq_u16_u32(vshrq_n_u32(vld1q_u32(src + x), 24));
-        auto a = vreinterpretq_u32_u16(vshrq_n_u16(vmlaq_n_u16(bias, alpha, opacity), 8));
-        // copy a to the 4 channel bytes of each pixel
-        a = vsliq_n_u32(a, a, 8);
-        auto factors = vreinterpretq_u8_u32(vsliq_n_u32(a, a, 16));
-        // ALPHA_BLEND(color, a) = (c * a + c) >> 8
-        auto low = vshrn_n_u16(vmlal_u8(colorWide, colorLow, vget_low_u8(factors)), 8);
-        auto high = vshrn_n_u16(vmlal_u8(colorWide, colorHigh, vget_high_u8(factors)), 8);
-        auto result = vcombine_u8(low, high);
+        // copy A of each pixel into both 16-bit halves of its lane
+        auto alpha = vshrq_n_u32(vld1q_u32(src + x), 24);
+        alpha = vsliq_n_u32(alpha, alpha, 16);
+        // ((opacity * alpha + 255) >> 8) + 1 = (alpha * opacity + 511) >> 8, rhadd intrinsic can add without the 16-bit overflow
+        auto factors = vshrq_n_u16(vrhaddq_u16(vmulq_u16(vreinterpretq_u16_u32(alpha), opacityVec), bias), 7);
+        // sri keeps the high byte of the odd product and puts the high byte of the even product below it
+        auto result = vsriq_n_u16(vmulq_u16(colorOdd, factors), vmulq_u16(colorEven, factors), 8);
         if (direct) {
-            // + ALPHA_BLEND(dst, 255 - a) = (t * (255 - a) + t) >> 8 per channel
-            auto target = vreinterpretq_u8_u32(vld1q_u32(pixels));
-            auto inverse = vmvnq_u8(factors);
-            auto dstLow = vshrn_n_u16(vmlal_u8(vmovl_u8(vget_low_u8(target)), vget_low_u8(target), vget_low_u8(inverse)), 8);
-            auto dstHigh = vshrn_n_u16(vmlal_u8(vmovl_u8(vget_high_u8(target)), vget_high_u8(target), vget_high_u8(inverse)), 8);
-            result = vaddq_u8(result, vcombine_u8(dstLow, dstHigh));
+            // + ALPHA_BLEND(dst, 255 - a) with 256 - a = 257 - factors
+            auto target = vreinterpretq_u16_u32(vld1q_u32(pixels));
+            auto inverse = vsubq_u16(full, factors);
+            auto even = vmulq_u16(vandq_u16(target, lowByte), inverse);
+            auto odd = vmulq_u16(vshrq_n_u16(target, 8), inverse);
+            result = vaddq_u16(result, vsriq_n_u16(odd, even, 8));
         }
-        vst1q_u32(pixels, vreinterpretq_u32_u8(result));
+        vst1q_u32(pixels, vreinterpretq_u32_u16(result));
     }
 #endif
     for (; x < len; ++x) {

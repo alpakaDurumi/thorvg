@@ -6,9 +6,9 @@ BENCH=$(cd "$(dirname "$4")" && pwd)/$(basename "$4")
 W=$HOME/hf
 rm -rf $W
 mkdir -p $W/base $W/mod
-git -c safe.directory='*' -C $REPO archive 2e6706fc | tar -x -C $W/base
-git -c safe.directory='*' -C $REPO archive 2e6706fc | tar -x -C $W/mod
-cp $MODFILE $W/mod/src/renderer/cpu_engine/tvgSwPostEffect.cpp
+git -c safe.directory='*' -C "$REPO" archive 2e6706fc | tar -x -C $W/base
+git -c safe.directory='*' -C "$REPO" archive 2e6706fc | tar -x -C $W/mod
+cp "$MODFILE" $W/mod/src/renderer/cpu_engine/tvgSwPostEffect.cpp
 diff -rq $W/base $W/mod || true
 export CC=clang CXX=clang++
 for t in base mod; do
@@ -18,7 +18,7 @@ for t in base mod; do
         meson setup $b $W/$t -Dsimd=$s -Dengines=cpu -Dloaders= -Ddefault_library=static -Dbuildtype=release -Dextra=$x >/dev/null
         ninja -C $b >/dev/null
         echo "$t-$n: $(grep -E 'AVX|NEON|OPENMP' $b/config.h | tr '\n' ' ')"
-        clang++ -O2 -std=c++14 -I$W/$t/inc $BENCH $b/src/libthorvg-1.a -fopenmp -lpthread -o $W/bench-$t-$n
+        clang++ -O2 -std=c++14 -I$W/$t/inc "$BENCH" $b/src/libthorvg-1.a -fopenmp -lpthread -o $W/bench-$t-$n
     done
 done
 cd $W
