@@ -1,17 +1,10 @@
 #include <thorvg.h>
-#include <cstdio>
 #include <cstdlib>
 #include <cstdint>
-#include <chrono>
 #include <vector>
 #include <memory>
 
 using namespace tvg;
-
-#ifdef INSTRUMENT
-extern double g_fillNs[2];
-extern uint64_t g_fillCalls[2];
-#endif
 
 static constexpr uint32_t W = 1920, H = 1080, HW = W / 2;
 
@@ -68,26 +61,11 @@ int main(int argc, char** argv)
     composite->add(SceneEffect::Fill, 0, 255, 0, 200);
     canvas->add(composite);
 
-    auto t0 = std::chrono::steady_clock::now();
     for (int i = 0; i < frames; ++i) {
         canvas->update();
         canvas->draw(true);
         canvas->sync();
     }
-    auto seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
-
-    uint64_t h = 1469598103934665603ull;
-    auto p = reinterpret_cast<const uint8_t*>(out.data());
-    for (size_t i = 0; i < out.size() * 4; ++i) {
-        h ^= p[i];
-        h *= 1099511628211ull;
-    }
-    fprintf(stderr, "%016llx\n", (unsigned long long)h);
-    fprintf(stderr, "fps %.1f\n", frames / seconds);
-#ifdef INSTRUMENT
-    for (int d = 1; d >= 0; --d) fprintf(stderr, "%s %.1f us/call  ", d ? "direct" : "non-direct", g_fillNs[d] / 1000.0 / g_fillCalls[d]);
-    fprintf(stderr, "\n");
-#endif
 
     Initializer::term();
     return 0;

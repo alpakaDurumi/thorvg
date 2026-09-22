@@ -10,4 +10,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - run: bash bench/neon.sh
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq clang meson ninja-build libomp-dev hyperfine >/dev/null
+      - run: lscpu | grep -m1 'Model name' && nproc && clang++ --version | head -1 && hyperfine --version
+      - run: bash bench/bench.sh . src/renderer/cpu_engine/tvgSwPostEffect.cpp $(nproc) bench/bench.cpp
