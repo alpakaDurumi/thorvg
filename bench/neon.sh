@@ -44,6 +44,15 @@ for t in base mod; do
     done
 done
 cd $W
+for b in base-simd mod-simd; do
+    obj=$(find build-$b/src -name "*tvgSwPostEffect.cpp.o")
+    echo "DISASM $b effectFill: umull=$(objdump -d $obj | awk '/<.*effectFill.*>:/{p=1} /^$/{p=0} p' | grep -cE 'umull|umlal') sli=$(objdump -d $obj | awk '/<.*effectFill.*>:/{p=1} /^$/{p=0} p' | grep -c 'sli')"
+done
+s=$(grep -n "^static void _fillRow(" $R/src/renderer/cpu_engine/tvgSwPostEffect.cpp | cut -d: -f1)
+e=$(grep -n "^bool effectFill(" $R/src/renderer/cpu_engine/tvgSwPostEffect.cpp | cut -d: -f1)
+sed -n "${s},$((e-2))p" $R/src/renderer/cpu_engine/tvgSwPostEffect.cpp > $W/fillrow_repo.inc
+clang++ -O3 -std=c++14 -DTHORVG_NEON_SUPPORT '-DFILLROW="fillrow_repo.inc"' -I$W $R/bench/fill_check.cpp -o $W/kernel
+for i in 1 2 3; do echo "KERNEL $(./kernel | grep 1920x1080)"; done
 for t in base mod; do for n in simd scalar-omp simd-omp; do printf "%-15s %s\n" $t-$n "$(./bench-$t-$n 20 2 2>&1 | head -1)"; done; done
 T=$(nproc)
 for v in simd:1 scalar-omp:$T simd-omp:$T; do
@@ -51,7 +60,9 @@ for v in simd:1 scalar-omp:$T simd-omp:$T; do
     for b in base mod; do ./bench-$b-$n 300 $th >/dev/null 2>&1; done
     for i in $(seq 1 10); do
         for b in base mod; do
-            echo "$b $(./bench-$b-$n 300 $th 2>&1 | awk '/us\/call/{print $2 + 2 * $5}')" >> $n.txt
+            line=$(./bench-$b-$n 300 $th 2>&1 | grep "us/call")
+            echo "$b $(echo "$line" | awk '{print $2 + 2 * $5}')" >> $n.txt
+            [ $i -le 3 ] && echo "SPLIT $n $b $line"
         done
     done
     python3 - $n $th <<'PY'
