@@ -1550,3 +1550,4 @@ bool rasterConvertCS(RenderSurface* surface, ColorSpace to)
     }
     return false;
 }
+
